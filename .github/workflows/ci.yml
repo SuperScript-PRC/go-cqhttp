@@ -189,14 +189,14 @@ jobs:
       - name: Package all binaries
         run: |
           ls -l bin_build/
-          zip -r gocq_multi_platform_v0.1.0.zip bin_build/  # 文件名包含版本号
+          # 移除打包步骤，直接使用原始文件
 
       - name: Upload to Releases 0.1.0
         uses: softprops/action-gh-release@v2  # 推荐的 Releases 上传工具
         with:
           tag_name: v0.1.0  # 对应 Releases 的标签（必须存在）
           name: v0.1.0 Release  # Releases 页面显示的名称
-          files: gocq_multi_platform_v0.1.0.zip  # 要上传的文件路径
+          files: bin_build/*  # 直接上传所有二进制文件
           draft: false  # 不设为草稿
           prerelease: false  # 不设为预发布
         env:
