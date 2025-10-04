@@ -1,83 +1,203 @@
-name: CI
+name: Build Multi-Platform Binaries (Manual Trigger)
 
-on: [push, pull_request, workflow_dispatch]
-
-env:
-  BINARY_PREFIX: "go-cqhttp_"
-  BINARY_SUFFIX: ""
-  COMMIT_ID: "${{ github.sha }}"
-  PR_PROMPT: "::warning:: Build artifact will not be uploaded due to the workflow is trigged by pull request."
+on:
+  workflow_dispatch:
 
 jobs:
-  build:
-    name: Build binary CI
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # build and publish in parallel: linux/386, linux/amd64, windows/386, windows/amd64, darwin/amd64, darwin/arm64
-        goos: [linux, windows, darwin]
-        goarch: ["386", amd64, arm, arm64]
-        exclude:
-          - goos: darwin
-            goarch: arm
-          - goos: darwin
-            goarch: "386"
-      fail-fast: true
+  # 编译 Windows amd64 版本（带 cgo 支持）
+  build-windows-amd64:
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Go environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
+          go-version: '1.21'
           cache: true
-          go-version: '1.20'
-      - name: Build binary file
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          IS_PR: ${{ !!github.head_ref }}
+
+      - name: Install MinGW (cgo 依赖)
         run: |
-          if [ $GOOS = "windows" ]; then export BINARY_SUFFIX="$BINARY_SUFFIX.exe"; fi
-          if $IS_PR ; then echo $PR_PROMPT; fi
-          export BINARY_NAME="$BINARY_PREFIX"$GOOS"_$GOARCH$BINARY_SUFFIX"
-          export CGO_ENABLED=0
-          export LD_FLAGS="-w -s -X github.com/Mrs4s/go-cqhttp/internal/base.Version=${COMMIT_ID::7}"
-          echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
-          go build -o "output/$BINARY_NAME" -trimpath -ldflags "$LD_FLAGS" .
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        if: ${{ !github.head_ref && github.event_name == 'push' }}
-        with:
-          name: ${{ env.BINARY_NAME }}
-          path: output/${{ env.BINARY_NAME }}
-  
-  release:
-    name: Create Release
-    needs: build
+          choco install mingw --no-progress
+          echo "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin" >> $env:GITHUB_PATH
+
+      - name: Build Windows amd64
+        run: |
+          New-Item -ItemType Directory -Path bin_build | Out-Null
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          $env:CGO_ENABLED = "1"
+          $env:CC = "x86_64-w64-mingw32-gcc"
+          go build -o "bin_build/gocq_windows_amd64.exe" main.go  # Windows 通常加 .exe 后缀
+
+      # - name: Upload Windows artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: gocq-windows-amd64
+      #     path: bin_build/gocq_windows_amd64.exe
+      #     retention-days: 7
+
+
+  # 编译 Linux amd64 版本（带 cgo 支持）
+  build-linux-amd64:
     runs-on: ubuntu-latest
-    if: ${{ !github.head_ref && github.event_name == 'push' }}
     steps:
-      - name: Download all artifacts
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Install GCC (cgo 依赖)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc
+
+      - name: Build Linux amd64
+        run: |
+          mkdir -p bin_build
+          export GOOS=linux
+          export GOARCH=amd64
+          export CGO_ENABLED=1
+          export CC=gcc
+          go build -o "bin_build/gocq_linux_amd64" main.go
+
+      # - name: Upload Linux amd64 artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: gocq-linux-amd64
+      #     path: bin_build/gocq_linux_amd64
+      #     retention-days: 7
+
+
+  # 编译 Linux arm64 版本（带 cgo 支持）
+  build-linux-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Install aarch64 cross-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build Linux arm64
+        run: |
+          mkdir -p bin_build
+          export GOOS=linux
+          export GOARCH=arm64
+          export CGO_ENABLED=1
+          export CC=aarch64-linux-gnu-gcc
+          go build -o "bin_build/gocq_linux_arm64" main.go
+
+      # - name: Upload Linux arm64 artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: gocq-linux-arm64
+      #     path: bin_build/gocq_linux_arm64
+      #     retention-days: 7
+
+
+  # 编译 Android aarch64 版本（带 cgo 支持）
+  build-android-aarch64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Download and configure Android NDK
+        run: |
+          NDK_VERSION=r25c
+          NDK_URL=https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip
+          wget -q $NDK_URL -O /tmp/ndk.zip
+          sudo mkdir -p /usr/local/ndk
+          sudo unzip -q /tmp/ndk.zip -d /usr/local/ndk
+          sudo ln -s /usr/local/ndk/android-ndk-${NDK_VERSION} /usr/local/ndk/current
+
+      - name: Build Android aarch64
+        run: |
+          mkdir -p bin_build
+          export NDK_PATH=/usr/local/ndk/current
+          export ANDROID_API=21
+          export GOOS=android
+          export GOARCH=arm64
+          export CGO_ENABLED=1
+          export CC=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${ANDROID_API}-clang
+          export CXX=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${ANDROID_API}-clang++
+          export AR=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ar
+          go build -o "bin_build/gocq_android_aarch64" main.go
+
+      # - name: Upload Android artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: gocq-android-aarch64
+      #     path: bin_build/gocq_android_aarch64
+      #     retention-days: 7
+
+
+  # 汇总所有产物并上传到 Releases 0.1.0 版本
+  aggregate-and-upload-to-release:
+    needs: [build-windows-amd64, build-linux-amd64, build-linux-arm64, build-android-aarch64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 必须设置此权限才能上传到 Releases
+    steps:
+      - name: Create aggregate directory
+        run: mkdir -p bin_build
+
+      - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          path: assets
-          
-      - name: Prepare assets
-        run: |
-          cd assets
-          for dir in */; do
-            if [ -d "$dir" ]; then
-              mv "$dir${dir%/}" ./
-            fi
-          done
-          ls -la
-          
-      - name: Release
-        uses: softprops/action-gh-release@v1
+          name: gocq-windows-amd64
+          path: bin_build/
+
+      - name: Download Linux amd64 artifact
+        uses: actions/download-artifact@v4
         with:
-          tag_name: newest
-          name: Newest Build
-          draft: false
-          prerelease: true
-          files: assets/*
+          name: gocq-linux-amd64
+          path: bin_build/
+
+      - name: Download Linux arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gocq-linux-arm64
+          path: bin_build/
+
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gocq-android-aarch64
+          path: bin_build/
+
+      - name: Package all binaries
+        run: |
+          ls -l bin_build/
+          zip -r gocq_multi_platform_v0.1.0.zip bin_build/  # 文件名包含版本号
+
+      - name: Upload to Releases 0.1.0
+        uses: softprops/action-gh-release@v2  # 推荐的 Releases 上传工具
+        with:
+          tag_name: v0.1.0  # 对应 Releases 的标签（必须存在）
+          name: v0.1.0 Release  # Releases 页面显示的名称
+          files: gocq_multi_platform_v0.1.0.zip  # 要上传的文件路径
+          draft: false  # 不设为草稿
+          prerelease: false  # 不设为预发布
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 自动生成的 token，用于认证
