@@ -43,10 +43,27 @@ jobs:
           export LD_FLAGS="-w -s -X github.com/Mrs4s/go-cqhttp/internal/base.Version=${COMMIT_ID::7}"
           echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
           go build -o "output/$BINARY_NAME" -trimpath -ldflags "$LD_FLAGS" .
+      - name: Upload artifacts for release
+        uses: actions/upload-artifact@v4
+        if: ${{ !github.head_ref && github.event_name == 'push' }}
+        with:
+          name: ${{ env.BINARY_NAME }}
+          path: output/${{ env.BINARY_NAME }}
+  
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ !github.head_ref && github.event_name == 'push' }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          
       - name: Create Release
         uses: actions/create-release@v1
         id: create_release
-        if: ${{ !github.head_ref && github.event_name == 'push' && matrix.goos == 'linux' && matrix.goarch == 'amd64' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -54,13 +71,22 @@ jobs:
           release_name: Newest Build
           draft: false
           prerelease: true
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        if: ${{ !github.head_ref && github.event_name == 'push' }}
+          
+      - name: Upload Release Assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: output/${{ env.BINARY_NAME }}
-          asset_name: ${{ env.BINARY_NAME }}
-          asset_content_type: application/octet-stream
+        run: |
+          cd artifacts
+          for dir in */; do
+            if [ -d "$dir" ]; then
+              asset_name="${dir%/}"
+              asset_path="$dir$asset_name"
+              echo "Uploading $asset_name..."
+              curl \
+                -X POST \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Content-Type: application/octet-stream" \
+                --data-binary @"$asset_path" \
+                "${{ steps.create_release.outputs.upload_url }}?name=$asset_name"
+            fi
+          done
