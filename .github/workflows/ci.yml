@@ -31,12 +31,12 @@ jobs:
           $env:CC = "x86_64-w64-mingw32-gcc"
           go build -o "bin_build/gocq_windows_amd64.exe" main.go  # Windows 通常加 .exe 后缀
 
-      # - name: Upload Windows artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: gocq-windows-amd64
-      #     path: bin_build/gocq_windows_amd64.exe
-      #     retention-days: 7
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gocq-windows-amd64
+          path: bin_build/gocq_windows_amd64.exe
+          retention-days: 7
 
 
   # 编译 Linux amd64 版本（带 cgo 支持）
@@ -66,12 +66,12 @@ jobs:
           export CC=gcc
           go build -o "bin_build/gocq_linux_amd64" main.go
 
-      # - name: Upload Linux amd64 artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: gocq-linux-amd64
-      #     path: bin_build/gocq_linux_amd64
-      #     retention-days: 7
+      - name: Upload Linux amd64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gocq-linux-amd64
+          path: bin_build/gocq_linux_amd64
+          retention-days: 7
 
 
   # 编译 Linux arm64 版本（带 cgo 支持）
@@ -101,12 +101,12 @@ jobs:
           export CC=aarch64-linux-gnu-gcc
           go build -o "bin_build/gocq_linux_arm64" main.go
 
-      # - name: Upload Linux arm64 artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: gocq-linux-arm64
-      #     path: bin_build/gocq_linux_arm64
-      #     retention-days: 7
+      - name: Upload Linux arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gocq-linux-arm64
+          path: bin_build/gocq_linux_arm64
+          retention-days: 7
 
 
   # 编译 Android aarch64 版本（带 cgo 支持）
@@ -144,12 +144,12 @@ jobs:
           export AR=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ar
           go build -o "bin_build/gocq_android_aarch64" main.go
 
-      # - name: Upload Android artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: gocq-android-aarch64
-      #     path: bin_build/gocq_android_aarch64
-      #     retention-days: 7
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gocq-android-aarch64
+          path: bin_build/gocq_android_aarch64
+          retention-days: 7
 
 
   # 汇总所有产物并上传到 Releases 0.1.0 版本
